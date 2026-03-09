@@ -1,0 +1,125 @@
+-- Calculate daily revenue by joining orders with product prices 
+-- and the session table to obtain the purchase date
+WITH revenue_data AS (
+SELECT
+ s.date AS date,
+ SUM(p.price) AS revenue
+FROM `DA.order` AS o
+INNER JOIN `DA.product` AS p
+ON o.item_id = p.item_id
+INNER JOIN `DA.session` AS s
+ON o.ga_session_id = s.ga_session_id
+GROUP BY s.date
+),
+
+-- Calculate email campaign activity metrics
+-- This includes number of emails sent, opened, and clicked
+message_cnt AS (
+SELECT
+ -- Convert relative email sending date into a real calendar date
+ DATE_ADD(s.date, INTERVAL es.sent_date DAY) AS date,
+ -- Total number of sent emails
+ COUNT(es.id_message) AS sent_emails_cnt,
+ -- Number of emails opened by users
+ COUNT(eo.id_account) AS open_emails_cnt,
+ -- Number of email link clicks
+ COUNT(ev.id_message) AS visit_emails_cnt
+FROM `DA.email_sent` AS es
+-- Join email opens to measure engagement
+LEFT JOIN `DA.email_open` AS eo
+ON es.id_message = eo.id_message
+-- Join email visits to capture clicks
+LEFT JOIN `DA.email_visit` AS ev
+ON es.id_message = ev.id_message
+-- Link email activity to the session in which the account was created
+INNER JOIN `DA.account_session` AS acs
+ON es.id_account = acs.account_id
+-- Get the original session date
+INNER JOIN `DA.session` AS s
+ON acs.ga_session_id = s.ga_session_id
+GROUP BY 1
+),
+
+-- Calculate number of user registrations per day
+registrations AS (
+SELECT
+ s.date AS date,
+ -- Count how many accounts were created in each session
+ COUNT(account_id) AS registrations_cnt
+FROM `DA.account_session` AS acs
+INNER JOIN `DA.session` AS s
+ON acs.ga_session_id = s.ga_session_id
+GROUP BY s.date
+),
+
+-- Combine all metrics into a single dataset
+-- Each metric is stored in its own column while others are filled with zeros
+final_data AS (
+SELECT
+   date,
+   revenue,
+   0 AS cost,
+   0 AS sent_emails_cnt,
+   0 AS open_emails_cnt,
+   0 AS visit_emails_cnt,
+   0 AS registrations_cnt
+FROM revenue_data
+
+UNION ALL
+
+-- Add marketing cost data
+SELECT
+   date,
+   0 AS revenue,
+   cost AS cost,
+   0 AS sent_emails_cnt,
+   0 AS open_emails_cnt,
+   0 AS visit_emails_cnt,
+   0 AS registrations_cnt
+FROM `DA.paid_search_cost` AS psc
+
+UNION ALL
+
+-- Add email campaign metrics
+SELECT
+  date,
+  0 AS revenue,
+  0 AS cost,
+  sent_emails_cnt,
+  open_emails_cnt,
+  visit_emails_cnt,
+  0 AS registrations_cnt
+FROM message_cnt
+
+UNION ALL
+  
+-- Add daily user registrations
+SELECT
+  date,
+  0 AS revenue,
+  0 AS cost,
+  0 AS sent_emails_cnt,
+  0 AS open_emails_cnt,
+  0 AS visit_emails_cnt,
+  registrations_cnt
+FROM registrations
+)
+
+  
+-- Aggregate final metrics by date
+SELECT
+ date,
+ -- Total daily revenue
+ SUM(revenue) AS revenue,
+ -- Total marketing costs
+ SUM(cost) AS cost,
+ -- Total emails sent
+ SUM(sent_emails_cnt) AS sent_emails,
+ -- Email open rate
+ SUM(open_emails_cnt) * 100 / SUM(sent_emails_cnt) AS open_rate,
+ -- Email click rate
+ SUM(visit_emails_cnt) * 100 / SUM(sent_emails_cnt) AS click_rate,
+ -- Total number of new user registrations
+ SUM(registrations_cnt) AS registrations_cnt
+FROM final_data
+GROUP BY date
