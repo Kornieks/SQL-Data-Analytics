@@ -1,0 +1,113 @@
+-- This query calculates daily email marketing performance
+-- and new user registrations by country.
+
+
+WITH union_data AS(
+
+    -- Email campaign engagement metrics
+    -- Calculates number of emails sent, opened, and clicked
+    -- for each date and country
+
+    SELECT
+        -- Convert relative email sent date into actual calendar date
+        DATE_ADD(ss.date, INTERVAL s.sent_date DAY) AS date,
+
+        -- Country where the user session originated
+        sp.country,
+
+        -- Total number of emails sent
+        COUNT(DISTINCT s.id_message) AS sent_cnt,
+
+        -- Number of emails opened
+        COUNT(DISTINCT o.id_message) AS open_cnt,
+
+        -- Number of clicks from email links
+        COUNT(DISTINCT v.id_message) AS click_cnt,
+
+        -- Placeholder for registrations (filled in another query)
+        NULL AS account_cnt
+
+    FROM `DA.email_sent` s
+
+    -- Link email to the user account session
+    LEFT JOIN `DA.account_session` ac
+        ON s.id_account = ac.account_id
+
+    -- Get session parameters such as country
+    LEFT JOIN `DA.session_params` sp
+        ON ac.ga_session_id = sp.ga_session_id
+
+    -- Join email open events
+    LEFT JOIN `DA.email_open` o
+        ON s.id_message = o.id_message
+
+    -- Join email click events
+    LEFT JOIN `DA.email_visit` v
+        ON o.id_message = v.id_message
+
+    -- Join session table to get the base session date
+    JOIN `DA.session` ss
+        ON ac.ga_session_id = ss.ga_session_id
+
+    GROUP BY
+        sp.country,
+        DATE_ADD(ss.date, INTERVAL s.sent_date DAY)
+
+    UNION ALL
+
+    -- User registrations by date and country
+
+    SELECT
+        -- Registration date based on session date
+        ss.date,
+
+        -- Country where the user registered
+        sp.country,
+
+        -- Placeholders for email metrics
+        NULL,
+        NULL,
+        NULL,
+
+        -- Count number of new accounts created
+        COUNT(ac.account_id) AS account_cnt
+
+    FROM `DA.account_session` ac
+
+    -- Join session parameters to get country information
+    LEFT JOIN `DA.session_params` sp
+        ON ac.ga_session_id = sp.ga_session_id
+
+    -- Join session table to get the registration date
+    JOIN `DA.session` ss
+        ON ac.ga_session_id = ss.ga_session_id
+  
+    GROUP BY
+        ss.date,
+        sp.country
+)
+
+-- FINAL AGGREGATION
+-- Combines email engagement metrics and registrations
+
+SELECT
+    date,
+    country,
+
+    -- Total emails sent
+    SUM(sent_cnt) AS sent_cnt,
+
+    -- Total emails opened
+    SUM(open_cnt) AS open_cnt,
+
+    -- Total email clicks
+    SUM(click_cnt) AS click_cnt,
+
+    -- Total new user registrations
+    SUM(account_cnt) AS account_cnt
+
+FROM union_data
+  
+GROUP BY
+    date,
+    country
