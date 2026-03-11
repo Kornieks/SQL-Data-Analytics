@@ -43,7 +43,7 @@ The SQL query performs the following steps:
 
 ---
 
-## [DashBoard](https://public.tableau.com/app/profile/kseniia.kornienko/viz/Emailmetrics_17652032274470/EmailMetricsPerformance)
+## [Dashboard](https://public.tableau.com/app/profile/kseniia.kornienko/viz/Emailmetrics_17652032274470/EmailMetricsPerformance)
 
 <img width="1414" height="779" alt="Screenshot 2026-03-10 at 22 02 53" src="https://github.com/user-attachments/assets/7aba161c-d219-40b5-afba-70d07e6f0fa0" />
 
